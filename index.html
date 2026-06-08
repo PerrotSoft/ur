@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Конфиденциальный документ</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --mouse-x: 50%;
+            --mouse-y: 50%;
+            --bg-color: #0b0f19;
+            --card-bg: #111827;
+            --text-color: #e5e7eb;
+            --accent-color: #38bdf8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            font-family: 'Times New Roman', Times, serif, Arial, sans-serif;
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            overflow-x: hidden;
+            position: relative;
+
+            /* Аппаратный запрет выделения текста */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        /* Элегантный премиальный контейнер для документа */
+        .document-wrapper {
+            position: relative;
+            background-color: var(--card-bg);
+            max-width: 700px;
+            width: 100%;
+            padding: 60px 50px;
+            border-radius: 12px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: filter 0.2s ease, opacity 0.2s ease;
+        }
+
+        /* Стилизация отображения Markdown текста */
+        .content h1 {
+            font-size: 22px;
+            text-align: center;
+            margin-bottom: 35px;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            line-height: 1.4;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 20px;
+        }
+
+        .content p {
+            font-size: 16px;
+            text-indent: 30px;
+            text-align: justify;
+            margin-bottom: 22px;
+            line-height: 1.7;
+            color: #d1d5db;
+        }
+
+        /* ДИНАМИЧЕСКАЯ МАСКА ПРОТИВ ФОТОГРАФИРОВАНИЯ ЭКРАНА */
+        /* Создает эффект фонарика вокруг мыши, скрывая остальной текст */
+        .security-mask {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none; /* Пропускает клики сквозь себя */
+            z-index: 9999;
+            background: radial-gradient(
+                circle 180px at var(--mouse-x) var(--mouse-y),
+                rgba(0, 0, 0, 0) 0%,
+                rgba(11, 15, 25, 0.4) 60%,
+                rgba(11, 15, 25, 0.98) 100%
+            );
+        }
+
+        /* Защитные водяные знаки, которые мешают камере телефона сфокусироваться */
+        .security-mask::before {
+            content: "КОНФИДЕНЦИАЛЬНО • ПРОСМОТР ОГРАНИЧЕН • COPY PROTECTED";
+            position: absolute;
+            font-family: sans-serif;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.03);
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            transform: rotate(-15deg);
+            line-height: 40px;
+            letter-spacing: 2px;
+            pointer-events: none;
+        }
+
+        /* Состояние полной блокировки при потере фокуса окна (Защита от Скриншотов) */
+        body.blurred-screen .document-wrapper {
+            filter: blur(30px);
+            opacity: 0.1;
+        }
+        body.blurred-screen .security-mask {
+            background: #0b0f19;
+        }
+        body.blurred-screen::after {
+            content: "ДОСТУП ЗАБЛОКИРОВАН (ОКНО ПОТЕРЯЛО ФОКУС)";
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--accent-color);
+            font-family: monospace;
+            font-size: 16px;
+            letter-spacing: 2px;
+            z-index: 100000;
+            padding: 15px 30px;
+            border: 1px dashed var(--accent-color);
+            background: var(--bg-color);
+        }
+
+        /* ЖЕСТКАЯ БЛОКИРОВКА ПЕЧАТИ И НАЖАТИЯ CTRL+P (Сохранить как PDF/Изображение) */
+        @media print {
+            body, html, .document-wrapper, .security-mask {
+                display: none !important;
+            }
+        }
+
+        /* Стили сообщения об ошибке CORS/Файла */
+        .error-box {
+            color: #ef4444;
+            text-align: center;
+            font-family: sans-serif;
+            font-size: 14px;
+        }
+        .error-box code {
+            display: block;
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            color: #f3f4f6;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="security-mask"></div>
+
+    <div class="document-wrapper">
+        <div class="content" id="content">
+            <p style="text-align: center; color: var(--accent-color);">Загрузка зашифрованного документа...</p>
+        </div>
+    </div>
+
+    <script>
+        // 1. ПОДКЛЮЧЕНИЕ И ЧТЕНИЕ ВНЕШНЕГО ФАЙЛА text.md
+        async function loadEncryptedData() {
+            try {
+                const response = await fetch('text.md');
+                if (!response.ok) throw new Error('Файл text.md не найден или запуск происходит без локального сервера (CORS)');
+                const markdownText = await response.text();
+                
+                // Рендерим Markdown в HTML
+                document.getElementById('content').innerHTML = marked.parse(markdownText);
+            } catch (err) {
+                document.getElementById('content').innerHTML = `
+                    <div class="error-box">
+                        <strong>Ошибка инициализации системы защиты данных:</strong>
+                        <code>${err.message}</code>
+                        <p style="margin-top:15px; font-size:12px; color:#9ca3af;">
+                            Напоминание: Браузеры запрещают чтение файлов напрямую с диска. <br>
+                            Запустите сайт через локальный сервер (например, VS Code Live Server, Python или Netlify/Vercel).
+                        </p>
+                    </div>`;
+            }
+        }
+
+        // Запуск чтения файла
+        loadEncryptedData();
+
+        // 2. ДИНАМИЧЕСКИЙ ТРЕКИНГ МЫШИ (Эффект Spotlight против фотосъемки)
+        window.addEventListener('mousemove', function(e) {
+            const x = (e.clientX / window.innerWidth) * 100;
+            const y = (e.clientY / window.innerHeight) * 100;
+            
+            document.documentElement.style.setProperty('--mouse-x', e.clientX + 'px');
+            document.documentElement.style.setProperty('--mouse-y', e.clientY + 'px');
+        });
+
+        // 3. ЗАЩИТА ОТ СКРИНШОТОВ (Мгновенное размытие при потере фокуса окна)
+        window.addEventListener('blur', function() {
+            document.body.classList.add('blurred-screen');
+        });
+        window.addEventListener('focus', function() {
+            document.body.classList.remove('blurred-screen');
+        });
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                document.body.classList.add('blurred-screen');
+            } else {
+                document.body.classList.remove('blurred-screen');
+            }
+        });
+
+        // 4. КОМПЛЕКСНАЯ БЛОКИРОВКА ГОРЯЧИХ КЛАВИШ И ДЕЙСТВИЙ
+        // Запрет контекстного меню (Правая кнопка мыши)
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        
+        // Запрет копирования, вырезания и перетаскивания данных
+        document.addEventListener('copy', e => e.preventDefault());
+        document.addEventListener('cut', e => e.preventDefault());
+        document.addEventListener('dragstart', e => e.preventDefault());
+
+        // Перехват системных клавиш (Сохранение, Печать, Скриншоты, Девтулз)
+        window.addEventListener('keydown', function(e) {
+            const isCtrl = e.ctrlKey || e.metaKey;
+            const key = e.key.toLowerCase();
+
+            // Блокировка: Ctrl+S (Сохранить), Ctrl+P (Печать/Сохранить в PDF), Ctrl+C (Копировать), Ctrl+U (Исходный код)
+            if (isCtrl && (key === 's' || key === 'p' || key === 'c' || key === 'u')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            // Блокировка инструментов разработчика (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C)
+            if (isCtrl && e.shiftKey && (key === 'i' || key === 'j' || key === 'c')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            if (e.key === 'F12') {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            // Дополнительная защита: если зажата клавиша Windows/Cmd или PrintScreen (смазывание)
+            if (e.key === 'PrintScreen' || e.key === 'Meta') {
+                document.body.classList.add('blurred-screen');
+                setTimeout(() => document.body.classList.remove('blurred-screen'), 1000);
+            }
+        }, true);
+    </script>
+</body>
+</html>
